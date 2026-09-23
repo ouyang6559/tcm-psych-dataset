@@ -23,10 +23,10 @@
 | 素材 | 格式 | 处理 |
 | --- | --- | --- |
 | `tcm/classics/tcmoc/**/*.md` | 干净 Markdown | ✅ 直接可用，零处理 |
-| `tcm/classics/tcm-ancient-books/*.txt` | 纯 txt | ✅ 直接可用，零处理 |
+| `tcm/classics/tcm-ancient-books/*.txt` | 纯 txt，但 **GB18030 编码** | ✅ `build_dataset.sh` 自动转 UTF-8 |
 | `tcm/textbooks/gmzyjc/**` | txt/md | ✅ 直接可用 |
 | `tcm/textbooks/tcm-skill/**` | md | ✅ 直接可用 |
-| `psychology/openstax-psychology/modules/**` | Connexion XML | ⚠️ 需转换（见 1.2） |
+| `psychology/openstax-psychology/modules/**` | **CNXML**（不是 html） | → `scripts/cnxml2md.py`（见 1.2） |
 | `local/ai-books/*.pdf` | 文字版 PDF | → MinerU（见 1.3） |
 | 古籍扫描件 / 长图 | 图片型 PDF | → Umi-OCR（见 1.4） |
 
@@ -38,28 +38,34 @@ cat dataset/MANIFEST.md        # 文件数、体积、扩展名统计
 find dataset -name "*.md" | head
 ```
 
-### 1.2 OpenStax 心理学：用成品 PDF 更省事
-
-`osbooks-psychology` 仓库里是教材源文件（XML），不是正文。两条路：
-
-- **推荐**：直接从官网下载成品 PDF/EPUB —— <https://openstax.org/details/books/psychology-2e>（免费，需登录后下载），然后走 1.3 的 MinerU 流程。
-- 或从源文件抽取正文：
+**编码坑（已自动化处理）**：`TCM-Ancient-Books` 的 701 个 txt 全是 **GB18030**，光明中医教材里也混有 GB18030 文件。直接读出来是乱码，模型会学到一堆废字符。`build_dataset.sh` 拷贝完会自动跑 `scripts/normalize_encoding.py` 统一转 UTF-8 并归一化换行符；单独检查可用：
 
 ```bash
-cd dataset/psychology/openstax-psychology
-python3 - <<'PY'
-import re, pathlib, html
-out = pathlib.Path("../../psychology-openstax.md")
-parts = []
-for f in sorted(pathlib.Path("modules").rglob("*.xhtml")) + sorted(pathlib.Path("modules").rglob("*.html")):
-    text = f.read_text(encoding="utf-8", errors="ignore")
-    text = re.sub(r"<script.*?</script>|<style.*?</style>", "", text, flags=re.S)
-    text = re.sub(r"<[^>]+>", " ", text)
-    parts.append(html.unescape(re.sub(r"[ \t]+", " ", text)))
-out.write_text("\n\n".join(parts), encoding="utf-8")
-print(out, out.stat().st_size, "bytes")
-PY
+python3 scripts/normalize_encoding.py dataset/ --check   # 只检查不改
+python3 scripts/normalize_encoding.py dataset/           # 原地转换
 ```
+
+### 1.2 OpenStax 心理学：CNXML → Markdown
+
+`osbooks-psychology` 仓库里的正文是 **`.cnxml`**（`modules/<id>/index.cnxml`），不是 xhtml，直接用正则剥标签抓不到东西。两种路子：
+
+**路子 A（推荐，最省事）**：从官网拿成品 PDF/EPUB —— <https://openstax.org/details/books/psychology-2e>（免费，需登录后下载），然后走 1.3 的 MinerU 流程。
+
+**路子 B**：用本仓库自带的转换脚本，按合集定义的章节顺序把 105 个模块合成一份 Markdown：
+
+```bash
+python3 scripts/cnxml2md.py dataset/psychology/openstax-psychology \
+    -o dataset/_markdown/psychology-openstax.md
+```
+
+脚本会：
+- 从 `collections/psychology-2e.collection.xml` 读章节顺序与章标题（如 "Introduction to Psychology"）
+- 每个模块的 `<title>` 作为二级标题，`<section>` 按嵌套深度转成 `###`/`####`
+- `<para>` 转段落，`<emphasis effect="italics">` 转 `*斜体*`，`<list><item>` 转列表，`<table>` 转管道表
+- 图片以 `*[Figure: 说明]*` 占位（图片在 `media/`，需要时再单独处理）
+- 未被合集收录的模块单独归到文末"未在合集中的模块"
+
+产出是纯文本结构的英文教材正文，可直接进 RAG 分块。
 
 ### 1.3 文字版 PDF → Markdown（MinerU）
 
@@ -212,6 +218,7 @@ pip install unsloth   # 单卡 24GB 可跑 LoRA
 4. **PDF 转换残留**：MinerU 对竖排古籍版式效果会下降，转完抽查 10 页
 5. **LFS 指针文件**：`local/ai-books` 若同步时用了 `--no-lfs`，PDF 只是 130 字节的指针文本，无法解析
 6. **把整本 PDF 直接塞进上下文**：超过窗口会被静默截断，看起来"答了"其实模型根本没读到后半本
+7. **编码是 GB18030 的古籍**：不转 UTF-8 就上传，AI 检索回来的是乱码；自查 `file -b --mime-encoding <文件>`，不是 `utf-8` 就先跑 `normalize_encoding.py`
 
 ---
 
@@ -220,7 +227,9 @@ pip install unsloth   # 单卡 24GB 可跑 LoRA
 - [ ] `scripts/validate_catalog.py` 通过
 - [ ] `scripts/sync.sh` 完成，`data/` 下所需源齐全
 - [ ] `scripts/build_dataset.sh` 生成 `dataset/MANIFEST.md`，文件数符合预期
+- [ ] `python3 scripts/normalize_encoding.py dataset/ --check` 解码失败为 0（确认无 GB18030 残留）
 - [ ] PDF 已用 MinerU/OCR 转成 md/txt 并放入 `dataset/_markdown/`
+- [ ] OpenStax 已用 `scripts/cnxml2md.py` 转成 `dataset/_markdown/psychology-openstax.md`
 - [ ] 提示词里写明了资料版本与"只依据上传资料作答"
 - [ ] 准备了 10 个已知答案的问题做过人工验证
 - [ ] 知识库仅个人使用，未公开再分发受许可限制的内容

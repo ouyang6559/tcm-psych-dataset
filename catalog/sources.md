@@ -36,7 +36,7 @@
 - **许可**：仓库无 LICENSE 文件；正文为 1949 年前公版古籍原典，可自由使用
 - **范围**：中医药古籍文本近 700 项，含《神农本草经》《本草经集注》《新修本草》《食疗本草》《滇南本草》《扁鹊心书》《黄帝内经》《伤寒论》《针灸甲乙经》《太乙金华宗旨》等，按序号命名的纯 txt，最适合直接喂 AI / 建 RAG。
 - **数据集路径**：`dataset/tcm/classics/tcm-ancient-books`
-- **备注**：文件在仓库根目录平铺，文件名形如 000-神农本草经.txt。
+- **备注**：文件在仓库根目录平铺，文件名形如 000-神农本草经.txt。⚠️ 全部 701 个 txt 为 GB18030 编码，直接喂 AI 是乱码——build_dataset.sh 会自动用 scripts/normalize_encoding.py 转成 UTF-8。
 
 ### TCM Open Classics (TCMOC)（中医开源医典）
 
@@ -75,7 +75,7 @@
 - **许可**：同上游 gmzyjc，公益开放
 - **范围**：光明中医教材的 Gitee 镜像，GitHub 访问不便时的备选。
 - **数据集路径**：`dataset/tcm/textbooks/gmzyjc-gitee`
-- **备注**：地址已连通验证，但分支与文件结构未实测。与 gmzyjc 内容重复，同步时二选一即可，避免重复。
+- **备注**：地址已连通验证，但分支与文件结构未实测。与 gmzyjc 内容重复（218MB），默认不同步（skip_default），仅 GitHub 访问受限时用 scripts/sync.sh --only gitee-gmzyjc 拉取，避免两份教材各占 220MB。
 
 ### TCM.Skill（中医教材知识库 Skill）
 
@@ -127,7 +127,7 @@
 - **许可**：仓库 LICENSE 文件标注 CC BY-NC-SA 4.0（以仓库为准）；网页版提供免费 PDF/EPUB 下载 https://openstax.org/details/books/psychology-2e
 - **范围**：莱斯大学 OpenStax 项目主导的开源《心理学（第二版）》教材源文件，经同行评审、完全免费。含 modules/ 分章源文件、collections/、media/。英文。
 - **数据集路径**：`dataset/psychology/openstax-psychology`
-- **备注**：源为 Connexion XML 格式，不是纯文本。喂 AI 更省事的做法是直接从 openstax.org 下载成品 PDF/EPUB，再用 MinerU 转 Markdown，见 docs/feeding-ai.md。
+- **备注**：正文为 .cnxml（modules/<id>/index.cnxml），不是 html。用 scripts/cnxml2md.py 按合集章节顺序转成 Markdown；或直接从 openstax.org 下载成品 PDF/EPUB 走 MinerU，见 docs/feeding-ai.md。
 
 ### OpenTCM（中医开放研究工具与数据库）
 

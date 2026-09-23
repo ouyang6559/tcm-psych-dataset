@@ -2,8 +2,9 @@
 # 把 data/ 下已同步的源，按 catalog 中的 dataset_path 归置成统一数据集 dataset/
 # 剥离上游 .git 目录，避免数据集目录变成嵌套仓库。
 # 用法:
-#   scripts/build_dataset.sh            # 生成 dataset/ + MANIFEST.md
+#   scripts/build_dataset.sh            # 生成 dataset/ + MANIFEST.md（含 UTF-8 转码）
 #   scripts/build_dataset.sh --clean    # 先清空 dataset/ 再重建
+#   NO_NORMALIZE=1 scripts/build_dataset.sh   # 跳过编码归一化
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -54,7 +55,15 @@ for s in cat["sources"]:
 PY
 )
 
-# 生成清单
+# 编码归一化: data/ 里的上游文件多为 GB18030（TCM-Ancient-Books 全部 701 个），
+# rsync 会把原始编码覆盖回来，所以必须在拷贝之后统一转成 UTF-8
+if [[ "${NO_NORMALIZE:-0}" != "1" && -f "$ROOT/scripts/normalize_encoding.py" ]]; then
+  echo
+  echo "[编码] 统一转 UTF-8 ..."
+  python3 "$ROOT/scripts/normalize_encoding.py" "$DATASET"
+fi
+
+# 生成清单（目录树只列到第 3 层，避免被上百个模块目录刷屏）
 MANIFEST="$DATASET/MANIFEST.md"
 {
   echo "# 数据集清单 (MANIFEST)"
@@ -67,14 +76,16 @@ MANIFEST="$DATASET/MANIFEST.md"
 
 while IFS= read -r dir; do
   rel="${dir#"$DATASET"/}"
-  count=$(find "$dir" -type f ! -name '.DS_Store' | wc -l | tr -d ' ')
+  depth=$(awk -F'/' '{print NF}' <<< "$rel")
+  [[ "$depth" -gt 3 ]] && continue
+  count=$(find "$dir" -type f ! -name '.DS_Store' ! -name 'MANIFEST.md' | wc -l | tr -d ' ')
   size=$(du -sh "$dir" 2>/dev/null | cut -f1)
-  echo "| $rel | $count | $size |" >> "$MANIFEST"
-done < <(find "$DATASET" -mindepth 1 -type d ! -path '*/.git*' | sort)
+  printf '| %s%s | %s | %s |\n' "$rel" "$([[ "$depth" -lt 3 ]] && echo '/…')" "$count" "$size" >> "$MANIFEST"
+done < <(find "$DATASET" -mindepth 1 -maxdepth 3 -type d ! -path '*/.git*' | sort)
 
 {
   echo
-  echo "> 上表目录行的文件数与体积**包含其子目录**。"
+  echo "> 「/…」结尾的行表示该目录还有更深的子目录未列出；目录行的文件数与体积**包含全部子目录**。"
   echo
   echo "## 按扩展名统计"
   echo

@@ -28,25 +28,33 @@ scripts/sync.sh
 # 3. 只同步一个先试试（11.6MB，最快见效）
 scripts/sync.sh --only tcm-skill
 
-# 4. 合并成统一数据集 + 生成清单
+# 4. 合并成统一数据集 + 自动转 UTF-8 + 生成清单
 scripts/build_dataset.sh
 cat dataset/MANIFEST.md
 
-# 5. 按 docs/feeding-ai.md 喂给 NotebookLM / ChatGPT / 本地 RAG
+# 5. OpenStax 心理学 CNXML → Markdown（16 章 + 前言，含 38 个表格）
+python3 scripts/cnxml2md.py dataset/psychology/openstax-psychology \
+        -o dataset/_markdown/psychology-openstax.md
+
+# 6. 按 docs/feeding-ai.md 喂给 NotebookLM / ChatGPT / 本地 RAG
 ```
 
 生成的数据集结构：
 
 ```
 dataset/
-├── MANIFEST.md                    # 文件数、体积、扩展名统计
+├── MANIFEST.md                    # 文件数、体积、扩展名统计（目录列到第 3 层）
+├── _markdown/
+│   └── psychology-openstax.md      # OpenStax《心理学（第二版）》全文（转换生成）
 ├── tcm/
-│   ├── classics/tcm-ancient-books # 700 项古籍，纯 txt ← 首选语料
+│   ├── classics/tcm-ancient-books # 701 项古籍，纯 txt（已转 UTF-8）← 首选语料
 │   ├── classics/tcmoc             # 分类规范的 Markdown 古籍 ← 最干净
 │   └── textbooks/                 # 光明中医教材 + TCM.Skill 教材知识库
-├── psychology/openstax-psychology # OpenStax《心理学（第二版）》
+├── psychology/openstax-psychology # OpenStax 源文件（CNXML + media）
 └── local/ai-books                 # 你已有的 22 个 PDF（走 LFS）
 ```
+
+> **编码注意**：`tcm-ancient-books` 上游 701 个 txt 全是 GB18030，`build_dataset.sh` 会自动转 UTF-8（`scripts/normalize_encoding.py`），不要手工从 `data/` 拷贝回去。当前实测规模：**13,694 个文件 / 1.4GB**。
 
 ---
 
@@ -54,6 +62,16 @@ dataset/
 
 完整机器可读版：[`catalog/sources.json`](catalog/sources.json)
 人读表格版：[`catalog/sources.md`](catalog/sources.md)
+
+**状态分布**
+
+| 状态 | 数量 | 含义 |
+| --- | --- | --- |
+| 🔄 自动同步 | 7 | `open` + `local`，`scripts/sync.sh` 默认拉取 |
+| ⚠️ 需 `--with-restricted` | 2 | 版权存疑，需自行确认后再拉 |
+| 📇 仅索引 / 🌐 网页参考 | 7 | 不同步文件 |
+
+**资料源一览**
 
 | 资料源 | 推荐 | 平台 | 状态 | 范围 |
 | --- | --- | --- | --- | --- |
@@ -65,7 +83,7 @@ dataset/
 | [TCM.Skill](https://github.com/YuanZHAO321/TCM.Skill) | ★★★★☆ | GitHub | 自动同步 | 四部规划教材知识库，CC BY-NC 4.0 |
 | [倪海厦中医资料](https://github.com/Lance-myk/Traditional-Chinese-Medicine-nihaisha) | ★★★★☆ | GitHub | 需 `--with-restricted` | 人纪/天纪讲义视频，520MB，版权待确认 |
 | [NiHaisha-Agent](https://github.com/Lance-myk/NiHaisha-Agent) | ★★★★☆ | GitHub | 需 `--with-restricted` | 基于倪海厦资料的 AI 知识库，参考其 RAG 组织 |
-| [光明中医 Gitee 镜像](https://gitee.com/zhyh1105/gmzyjc) | ★★★★☆ | Gitee | 自动同步 | GitHub 访问不便时的备选 |
+| [光明中医 Gitee 镜像](https://gitee.com/zhyh1105/gmzyjc) | ★★★★☆ | Gitee | 默认跳过（重复） | 与 GitHub 源重复 218MB，`--only gitee-gmzyjc` 才拉 |
 | [ai-books](https://github.com/ouyang6559/ai-books) | ★★★★☆ | GitHub | 自动同步（LFS） | 你已有的 22 个 PDF |
 | [books-2](https://github.com/KnowNo/books-2) | ★★★☆☆ | GitHub | 仅索引 | 中文书目清单，0.2MB |
 | [zh-books](https://github.com/learnuidev/zh-books) | ★★★☆☆ | GitHub | 仅索引 | 中文电子书，441MB |
@@ -77,6 +95,7 @@ dataset/
 **状态说明**
 
 - `open` — 版权清晰（公版 / 公益开放 / CC 许可），`scripts/sync.sh` 默认同步
+- `skip_default` — 地址有效但与其他源重复，默认不拉（当前：gitee 镜像）
 - `restricted` — 版权存疑或体积过大，需显式 `--with-restricted` 才同步
 - `index-only` — 只有书目价值，**不同步文件**（多为现代出版物）
 - `reference` / `local` — 网页参考 / 本地已有仓库
@@ -112,8 +131,10 @@ tcm-psych-dataset/
 │   ├── books.json             # 57 本书映射表（唯一事实来源）
 │   └── books.md               # 由脚本生成的人读表格
 ├── scripts/
-│   ├── sync.sh                # 同步开放源 → data/
+│   ├── sync.sh                # 同步开放源 → data/（分级: open/restricted/index-only）
 │   ├── build_dataset.sh       # 合并 data/ → dataset/ + MANIFEST
+│   ├── cnxml2md.py            # OpenStax CNXML → Markdown
+│   ├── normalize_encoding.py  # GB18030 → UTF-8 统一转码
 │   ├── render_catalog.py      # 从 JSON 生成 Markdown 表格
 │   └── validate_catalog.py    # 结构 + URL 校验
 ├── docs/
@@ -130,18 +151,23 @@ tcm-psych-dataset/
 
 ```bash
 scripts/sync.sh --list                     # 列出所有源及状态
-scripts/sync.sh                            # 同步全部 open 源
+scripts/sync.sh                            # 同步全部 open 源（跳过 skip_default 的重复镜像）
 scripts/sync.sh --only tcmoc,tcm-skill     # 只同步指定源
+scripts/sync.sh --only gitee-gmzyjc        # 显式拉取被 skip_default 跳过的镜像
 scripts/sync.sh --with-restricted          # 追加同步版权存疑的源
 scripts/sync.sh --force                    # 强制重新克隆
 scripts/sync.sh --no-lfs                   # 跳过 LFS 大文件
 
-scripts/build_dataset.sh                   # 合并成 dataset/
+scripts/build_dataset.sh                   # 合并成 dataset/（含 UTF-8 转码）
 scripts/build_dataset.sh --clean           # 清空后重建
+NO_NORMALIZE=1 scripts/build_dataset.sh    # 跳过编码归一化
 
 python3 scripts/validate_catalog.py              # 校验目录结构
 python3 scripts/validate_catalog.py --check-urls # 追加网络可达性检查
 python3 scripts/render_catalog.py                # 改了 JSON 后重新生成 md 表格
+python3 scripts/normalize_encoding.py dataset/ --check   # 检查是否还有非 UTF-8 文件
+python3 scripts/cnxml2md.py dataset/psychology/openstax-psychology \
+        -o dataset/_markdown/psychology-openstax.md   # OpenStax 转 Markdown
 ```
 
 ---

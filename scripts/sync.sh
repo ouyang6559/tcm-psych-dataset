@@ -43,7 +43,7 @@ fi
 
 mkdir -p "$DATA"
 
-# 从 catalog 读出待处理源，输出: id<TAB>clone_url<TAB>branch<TAB>status<TAB>lfs<TAB>size_mb
+# 从 catalog 读出待处理源，输出: id<TAB>clone_url<TAB>branch<TAB>status<TAB>lfs<TAB>size_mb<TAB>skip_default
 read_sources() {
   python3 - "$CATALOG" <<'PY'
 import json, sys
@@ -58,6 +58,7 @@ for s in cat["sources"]:
         s["status"],
         "1" if s.get("lfs") else "0",
         str(s.get("size_mb") or "?"),
+        "1" if s.get("skip_default") else "0",
     ]))
 PY
 }
@@ -65,7 +66,7 @@ PY
 if [[ "$DO_LIST" == "1" ]]; then
   printf "%-24s %-14s %-10s %s\n" "ID" "STATUS" "SIZE(MB)" "URL"
   printf "%-24s %-14s %-10s %s\n" "------------------------" "--------------" "----------" "----"
-  while IFS=$'\t' read -r id url branch status lfs size; do
+  while IFS=$'\t' read -r id url branch status lfs size skip_default; do
     printf "%-24s %-14s %-10s %s\n" "$id" "$status" "$size" "$url"
   done < <(read_sources)
   exit 0
@@ -73,7 +74,7 @@ fi
 
 SYNCED=0 SKIPPED=0 FAILED=0
 
-while IFS=$'\t' read -r id url branch status lfs size; do
+while IFS=$'\t' read -r id url branch status lfs size skip_default; do
   [[ "$branch" == "-" ]] && branch=""
 
   # 版权状态门限（优先于 --only，避免显式点名绕过 restricted/index-only）
@@ -88,6 +89,10 @@ while IFS=$'\t' read -r id url branch status lfs size; do
   # --only 过滤
   if [[ -n "$ONLY" ]]; then
     [[ ",$ONLY," == *",$id,"* ]] || { SKIPPED=$((SKIPPED+1)); continue; }
+  elif [[ "$skip_default" == "1" ]]; then
+    echo "[跳过] ${id} （skip_default：与其他源重复，指定 --only ${id} 才同步）"
+    SKIPPED=$((SKIPPED+1))
+    continue
   fi
 
   dest="$DATA/$id"
