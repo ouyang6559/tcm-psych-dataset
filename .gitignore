@@ -1,0 +1,6 @@
+# 同步与生成的内容不入库，本仓库只保留目录和脚本
+data/
+dataset/
+.DS_Store
+*.pyc
+__pycache__/
