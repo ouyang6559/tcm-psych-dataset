@@ -107,6 +107,39 @@ tesseract "扫描页.png" stdout -l chi_sim+eng --psm 6 > page.txt
 
 ## 2. 路线 A：直接上传建知识库（推荐起步）
 
+### 2.0 一键生成“首批上传组”（推荐从这里开始）
+
+`dataset/` 有 13,694 个文件，不能一个个传（NotebookLM 单本约 50 个源），而且上游之间**互相重复**
+（`tcmoc` 的 671 个 txt 与 `tcm-ancient-books` 字节级相同；`tcm-skill` 里 26 本书又与古籍库同名）。
+`scripts/build_notebook_batch.py` 负责合并 + 去重 + 给每本书加来源头：
+
+```bash
+python3 scripts/build_notebook_batch.py            # → notebook-batch/（21 个源）
+python3 scripts/build_notebook_batch.py --no-pdf   # 只要文本
+open notebook-batch/MANIFEST.md                    # 上传顺序、每源大小、排除原因
+```
+
+首批构成（**21 源**，文本 45.5MB / 1,863 万字符 ≈ 1,240 万 token）：
+
+| 组 | 文件 | 说明 |
+|----|------|------|
+| 心理学 | `01-心理学-OpenStax-Psychology-2e.md` | 唯一整书可投喂的心理学正文 |
+| 教材 | `02`~`05`（4 个） | 中基+中诊+50 索引 / 中药+方剂 / 内科 / 针灸养生食疗 |
+| 经典 | `06`~`13`（8 个） | 内经、伤寒金匮、本草 30 种、难经脉学、针灸、温病方书、临证名著、养生情志 |
+| PDF | 8 个 | 验方、骨伤、内针、泡脚、足疗×2、刮痧、丹经（≤46MB，超限的 3 个已排除） |
+
+合并文件内每本书前都有来源头，NotebookLM 引用会落到具体某本书的小节：
+
+```markdown
+## 《伤寒论》
+> 来源: `tcm/classics/tcm-ancient-books/457-伤寒论.txt`
+> 上游: GitHub lab99x/tcm-ancient-books（古籍扫描 OCR 文本 · 公版书 · 非权威校本）
+```
+
+**留到批次 B 的**：`tcm-ancient-books` 其余约 660 本（252MB，按 12 个一级类别再合并）、
+`gmzyjc` 光明中医 5,672 文件（课程代号 → 课程名映射未完成，且混有校报/人物名单等非课程内容）、
+3 个超 50MB 的 PDF。
+
 ### 2.1 NotebookLM（Google）
 
 1. 打开 <https://notebooklm.google.com/> 新建笔记本
