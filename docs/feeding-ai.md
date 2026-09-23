@@ -114,12 +114,14 @@ tesseract "扫描页.png" stdout -l chi_sim+eng --psm 6 > page.txt
 `scripts/build_notebook_batch.py` 负责合并 + 去重 + 给每本书加来源头：
 
 ```bash
-python3 scripts/build_notebook_batch.py            # → notebook-batch/（21 个源）
+python3 scripts/build_notebook_batch.py            # 批次 A → notebook-batch/（21 源）
+python3 scripts/build_notebook_batch.py --tier ab  # 批次 A+B 一起生成（42 源 ≤ 50 上限）
+python3 scripts/build_notebook_batch.py --tier b   # 只重生成批次 B（已自动排除 A 的输入）
 python3 scripts/build_notebook_batch.py --no-pdf   # 只要文本
 open notebook-batch/MANIFEST.md                    # 上传顺序、每源大小、排除原因
 ```
 
-首批构成（**21 源**，文本 45.5MB / 1,863 万字符 ≈ 1,240 万 token）：
+批次 A 构成（**21 源**，文本 45.5MB / 1,863 万字符 ≈ 1,240 万 token）：
 
 | 组 | 文件 | 说明 |
 |----|------|------|
@@ -136,9 +138,15 @@ open notebook-batch/MANIFEST.md                    # 上传顺序、每源大小
 > 上游: GitHub lab99x/tcm-ancient-books（古籍扫描 OCR 文本 · 公版书 · 非权威校本）
 ```
 
-**留到批次 B 的**：`tcm-ancient-books` 其余约 660 本（252MB，按 12 个一级类别再合并）、
-`gmzyjc` 光明中医 5,672 文件（课程代号 → 课程名映射未完成，且混有校报/人物名单等非课程内容）、
-3 个超 50MB 的 PDF。
+**批次 B（文件 14-32，文本 230MB，`--tier ab` 后两批合计 42 源）**：
+
+| 组 | 文件 | 说明 |
+|----|------|------|
+| 光明教材 | `14`~`20`（7 个） | 46 个目录按代号映射分 7 组：经典讲解 / 经典原文 / 基础与方剂 / 临床各科 / 针灸学 / 临证与医案 / 校史与杂纂；映射表见 [`catalog/gmzyjc-courses.json`](../catalog/gmzyjc-courses.json) |
+| 古籍 12 类 | `21`~`32`（14 个，方书、临证各科拆 `-1`/`-2` 卷） | 按《中国中医古籍总目》一级分类合并 644 本；归类表见 [`catalog/ancient-categories.json`](../catalog/ancient-categories.json)（已排除首批用掉的 27 本与 tcmoc 重复的 30 本） |
+
+仍排除：3 个超 50MB 的 PDF；gmzyjc 的 `rmbook`（`rm` 的异版）与 `gdhy`（仅 docx）；
+风水、奇门等非“中医+心理”主线的 PDF。
 
 ### 2.1 NotebookLM（Google）
 

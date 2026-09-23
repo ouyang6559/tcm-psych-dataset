@@ -149,11 +149,113 @@ def render_books(doc: dict, sources: dict) -> str:
     return "\n".join(lines)
 
 
+def render_gmzyjc(doc: dict) -> str:
+    dirs = {d["code"]: d for d in doc["dirs"]}
+    lines = [
+        "# 光明教材（gmzyjc）课程代号映射表",
+        "",
+        f"> 由 `scripts/render_catalog.py` 生成于 {doc['generated_at']}，"
+        "唯一事实来源是 [`gmzyjc-courses.json`](./gmzyjc-courses.json)，请勿直接编辑本文件。",
+        "",
+        f"- **数据源**：`{doc['source_dir']}`（46 个目录）",
+        f"- **官方课程清单**：`{doc['readme']}`",
+        "",
+        "## 分组（Notebook 批次 B 文件 14-20）",
+        "",
+        "| 组 | 标题 | 目录 | 目录数 | 文件数 | 体积 |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for g in doc["groups"]:
+        members = [dirs[c] for c in g["dirs"]]
+        files = sum(m["files"] for m in members)
+        nbytes = sum(m["bytes"] for m in members)
+        codes = " ".join(f"`{c}`" for c in g["dirs"])
+        lines.append(
+            f"| {g['no']} | {g['title']} | {codes} | {len(members)} | {files} | {nbytes / 1024 / 1024:.1f} MB |"
+        )
+
+    lines += [
+        "",
+        "## 目录明细",
+        "",
+        "| 代号 | 书名/课程 | 课号 | 官方 | 类型 | 组 | 置信 | 文件数 | 体积 | 证据 |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for code in sorted(dirs):
+        d = dirs[code]
+        course = f"第{d['course_no']:02d}课" if d.get("course_no") else "—"
+        official = "✅" if d.get("official") else ""
+        group = str(d["group"]) if d.get("group") is not None else "不入批次"
+        ev = d["evidence"].replace("|", "｜")
+        lines.append(
+            f"| `{code}` | {d['title']} | {course} | {official} | {d['kind']} | {group} "
+            f"| {d['confidence']} | {d['files']} | {d['bytes'] / 1024 / 1024:.1f} MB | {ev} |"
+        )
+
+    lines += ["", "## 类型说明", ""]
+    for key, val in doc["kinds"].items():
+        lines.append(f"- `{key}`：{val}")
+    lines += ["", "## 备注", ""]
+    for note in doc.get("notes", []):
+        lines.append(f"- {note}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_ancient(doc: dict) -> str:
+    lines = [
+        "# 701 本中医古籍 · 12 类归类表",
+        "",
+        f"> 由 `scripts/render_catalog.py` 生成于 {doc['generated_at']}，"
+        "唯一事实来源是 [`ancient-categories.json`](./ancient-categories.json)，请勿直接编辑本文件。",
+        "",
+        f"- **分类体系**：{doc['taxonomy']}",
+        f"- **归类方法**：{doc['method']}",
+        f"- **总数**：{doc['total']} 本（编号 000-700，源文件见 `dataset/tcm/classics/tcm-ancient-books/`）",
+        "",
+        "## 分类统计",
+        "",
+        "| 《总目》分类号 | 分类 | id | 本数 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for c in doc["categories"]:
+        lines.append(f"| {c['catelog_no']} | {c['name']} | `{c['id']}` | {c['count']} |")
+    total = sum(c["count"] for c in doc["categories"])
+    lines.append(f"| — | **合计** | — | **{total}** |")
+
+    ovr = doc.get("overrides", {})
+    cat_name = {c["id"]: c["name"] for c in doc["categories"]}
+    lines += [
+        "",
+        f"## 人工校订（OVERRIDES，{len(ovr)} 条）",
+        "",
+        "书名无法由关键词规则判准、或位置与书名矛盾的少数书目，"
+        "由 `scripts/classify_ancient.py` 中的 OVERRIDES 直接指定：",
+        "",
+        "| 编号 | 分类 | 理由 |",
+        "| --- | --- | --- |",
+    ]
+    for oid in sorted(ovr):
+        ov = ovr[oid]
+        reason = ov["reason"].replace("|", "｜")
+        lines.append(f"| {oid} | {cat_name.get(ov['cat'], ov['cat'])} | {reason} |")
+
+    lines += ["", "## 备注", ""]
+    for note in doc.get("notes", []):
+        lines.append(f"- {note}")
+    lines += ["", "> 重新归类：改 `scripts/classify_ancient.py` 后运行 `python3 scripts/classify_ancient.py`。", ""]
+    return "\n".join(lines)
+
+
 def main() -> None:
     sources = load("sources.json")
     books = load("books.json")
+    gmzyjc = load("gmzyjc-courses.json")
+    ancient = load("ancient-categories.json")
     write("sources.md", render_sources(sources))
     write("books.md", render_books(books, sources))
+    write("gmzyjc-courses.md", render_gmzyjc(gmzyjc))
+    write("ancient-categories.md", render_ancient(ancient))
 
 
 if __name__ == "__main__":

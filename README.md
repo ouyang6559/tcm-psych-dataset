@@ -4,7 +4,7 @@
 
 本仓库本身**不存放受版权保护的书籍文件**，它提供三样东西：
 
-1. **`catalog/`** — 经过连通性验证的资料源总目录 + 57 本目标书籍的逐本映射表
+1. **`catalog/`** — 资料源总目录、57 本目标书逐本映射、gmzyjc 课程代号映射、古籍 12 类归类（JSON 为唯一事实来源）
 2. **`scripts/`** — 一键同步、合并成统一目录、校验目录的脚本
 3. **`docs/`** — 从原始 PDF 到 AI 知识库的完整流水线
 
@@ -36,9 +36,10 @@ cat dataset/MANIFEST.md
 python3 scripts/cnxml2md.py dataset/psychology/openstax-psychology \
         -o dataset/_markdown/psychology-openstax.md
 
-# 6. 组装 NotebookLM 首批上传组（合并 + 去重 + 每本书加来源头）
-python3 scripts/build_notebook_batch.py
-open notebook-batch/MANIFEST.md     # 21 个源、上传顺序、排除原因
+# 6. 组装 NotebookLM 上传组（合并 + 去重 + 每本书加来源头）
+python3 scripts/build_notebook_batch.py            # 批次 A：21 源
+python3 scripts/build_notebook_batch.py --tier ab  # 批次 A+B：42 源（≤50 上限）
+open notebook-batch/MANIFEST.md     # 上传顺序、排除原因
 
 # 7. 按 docs/feeding-ai.md §2 喂给 NotebookLM / ChatGPT / 本地 RAG
 ```
@@ -133,13 +134,18 @@ tcm-psych-dataset/
 │   ├── sources.json           # 资料源目录（唯一事实来源）
 │   ├── sources.md             # 由脚本生成的人读表格
 │   ├── books.json             # 57 本书映射表（唯一事实来源）
-│   └── books.md               # 由脚本生成的人读表格
+│   ├── books.md               # 由脚本生成的人读表格
+│   ├── gmzyjc-courses.json    # 光明教材 46 目录 → 代号/课号/分组（唯一事实来源）
+│   ├── gmzyjc-courses.md      # 由脚本生成的人读表格
+│   ├── ancient-categories.json # 古籍 701 本 →《总目》12 类归类（唯一事实来源）
+│   └── ancient-categories.md   # 由脚本生成的人读表格
 ├── scripts/
 │   ├── sync.sh                # 同步开放源 → data/（分级: open/restricted/index-only）
 │   ├── build_dataset.sh       # 合并 data/ → dataset/ + MANIFEST
 │   ├── cnxml2md.py            # OpenStax CNXML → Markdown
 │   ├── normalize_encoding.py  # GB18030 → UTF-8 统一转码
-│   ├── build_notebook_batch.py # 组装 NotebookLM 首批上传组
+│   ├── classify_ancient.py    # 古籍 701 本 → 12 类（规则+校订+邻域平滑）
+│   ├── build_notebook_batch.py # 组装 NotebookLM 上传组（--tier a/b/ab）
 │   ├── render_catalog.py      # 从 JSON 生成 Markdown 表格
 │   └── validate_catalog.py    # 结构 + URL 校验
 ├── docs/
@@ -168,9 +174,11 @@ scripts/build_dataset.sh                   # 合并成 dataset/（含 UTF-8 转�
 scripts/build_dataset.sh --clean           # 清空后重建
 NO_NORMALIZE=1 scripts/build_dataset.sh    # 跳过编码归一化
 
-python3 scripts/validate_catalog.py              # 校验目录结构
+python3 scripts/validate_catalog.py              # 校验目录结构（sources/books/ancient/gmzyjc）
 python3 scripts/validate_catalog.py --check-urls # 追加网络可达性检查
-python3 scripts/build_notebook_batch.py          # 生成 notebook-batch/（21 个上传源）
+python3 scripts/classify_ancient.py              # 重跑古籍 12 类归类（生成 ancient-categories.json）
+python3 scripts/build_notebook_batch.py          # 生成 notebook-batch/（批次 A：21 个上传源）
+python3 scripts/build_notebook_batch.py --tier ab # 批次 A+B：42 个上传源
 python3 scripts/build_notebook_batch.py --no-pdf # 只要文本、不复制 PDF
 python3 scripts/render_catalog.py                # 改了 JSON 后重新生成 md 表格
 python3 scripts/normalize_encoding.py dataset/ --check   # 检查是否还有非 UTF-8 文件
